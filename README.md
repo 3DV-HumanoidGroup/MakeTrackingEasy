@@ -1,6 +1,5 @@
 # Make Tracking Easy: Neural Motion Retargeting for Humanoid Whole-body Control (NMR)
 
-[[Paper](#)] [[Website](#)] [[HuggingFace Demo](https://huggingface.co/spaces/RayZhao/NMR)]
 
 ## News
 
@@ -162,13 +161,11 @@ huggingface-cli download RayZhao/NMR assets/SMPLX_NEUTRAL.npz --local-dir .
 ## Citation
 
 ```bibtex
-@article{nmr2026,
+
+@article{zhao2026make,
   title={Make Tracking Easy: Neural Motion Retargeting for Humanoid Whole-body Control},
-  author={...},
+  author={Zhao, Qingrui and Yang, Kaiyue and Wang, Xiyu and Zhao, Shiqi and Lu, Yi and Zhang, Xinfang and Yin, Wei and Shen, Qiu and Long, Xiao-Xiao and Cao, Xun},
+  journal={arXiv preprint arXiv:2603.22201},
   year={2026}
 }
 ```
-
-## License
-
-[To be added]
