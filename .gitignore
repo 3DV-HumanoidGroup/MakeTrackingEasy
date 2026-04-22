@@ -17,3 +17,5 @@ output/
 
 # Jupyter
 .ipynb_checkpoints/
+
+CLAUDE.md

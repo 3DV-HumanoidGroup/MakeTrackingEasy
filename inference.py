@@ -357,3 +357,59 @@ def load_all(weights_dir=None, assets_dir=None, device=None):
     g1_std = torch.from_numpy(np.load(os.path.join(weights_dir, 'gmr_std.npy'))).float()
 
     return model, smplx_model, betas, smplx_mean, smplx_std, g1_mean, g1_std, device
+
+
+# ---------- CLI ----------
+
+if __name__ == '__main__':
+    import argparse
+    import glob
+
+    parser = argparse.ArgumentParser(description='NMR: AMASS NPZ → bmimic NPZ')
+    parser.add_argument('--src', required=True,
+                        help='Input .npz file or directory of .npz files')
+    parser.add_argument('--output-dir', required=True,
+                        help='Output directory for bmimic .npz files')
+    parser.add_argument('--no-filter', action='store_true',
+                        help='Disable Butterworth low-pass filter')
+    args = parser.parse_args()
+
+    src = args.src
+    if os.path.isdir(src):
+        input_files = sorted(glob.glob(os.path.join(src, '**', '*.npz'), recursive=True))
+    else:
+        input_files = [src]
+
+    if not input_files:
+        print(f'No .npz files found in {src}')
+        raise SystemExit(1)
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    from convert_bmimic import convert_to_bmimic
+    XML_PATH = os.path.join(BASE_DIR, 'assets', 'g1_mocap_29dof.xml')
+
+    print('Loading model...')
+    model, smplx_model, betas, smplx_mean, smplx_std, g1_mean, g1_std, device = load_all()
+    print(f'Model loaded on {device}')
+
+    for i, fp in enumerate(input_files):
+        print(f'[{i+1}/{len(input_files)}] {fp}')
+        result, timing = infer_single(
+            fp, model, smplx_model, betas,
+            smplx_mean, smplx_std, g1_mean, g1_std,
+            device, apply_filter=not args.no_filter,
+        )
+        if result is None:
+            print(f'  Skipped: sequence too short (< 4 frames)')
+            continue
+
+        bmimic_data = convert_to_bmimic(result, XML_PATH, device, tgt_fps=50.0, src_fps=30.0)
+        stem = os.path.splitext(os.path.basename(fp))[0]
+        out_path = os.path.join(args.output_dir, stem + '.npz')
+        np.savez(out_path, **bmimic_data)
+
+        T = result['dof'].shape[0]
+        T_out = bmimic_data['joint_pos'].shape[0]
+        print(f'  {T} frames @ 30 FPS → {T_out} frames @ 50 FPS → {out_path}')
+        print(f'  Total: {timing["total"]:.2f}s')

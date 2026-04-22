@@ -1,7 +1,7 @@
 """
 Gradio Demo: Human → G1 Robot Motion Retargeting
 
-上传 AMASS 格式 NPZ 文件，推理并展示 3D 骨骼动画。
+上传 AMASS 格式 NPZ 文件，推理并展示 3D 骨骼动画，导出 bmimic 格式。
 """
 import os
 import sys
@@ -14,11 +14,15 @@ import torch
 _torch_load = torch.load
 torch.load = lambda *args, **kwargs: _torch_load(*args, weights_only=kwargs.pop('weights_only', False), **kwargs)
 
+import numpy as np
 import gradio as gr
-import joblib
 
 from inference import load_all, infer_single
 from visualize import create_skeleton_animation
+from convert_bmimic import convert_to_bmimic
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+XML_PATH = os.path.join(BASE_DIR, 'assets', 'g1_mocap_29dof.xml')
 
 # ---------- 启动时加载模型 ----------
 print("Loading model...")
@@ -45,9 +49,10 @@ def predict(input_file):
     if result is None:
         return None, None, "Error: sequence too short (< 4 frames)."
 
-    # 保存 PKL 到临时文件
-    output_path = os.path.join(tempfile.gettempdir(), 'g1_motion.pkl')
-    joblib.dump(result, output_path)
+    # 转换为 bmimic npz 格式 (30fps → 50fps)
+    bmimic_data = convert_to_bmimic(result, XML_PATH, device, tgt_fps=50.0, src_fps=30.0)
+    output_path = os.path.join(tempfile.gettempdir(), 'g1_motion.npz')
+    np.savez(output_path, **bmimic_data)
 
     # 生成 3D 骨骼动画
     fig = create_skeleton_animation(
@@ -55,13 +60,15 @@ def predict(input_file):
     )
 
     T = result['dof'].shape[0]
+    T_bmimic = bmimic_data['joint_pos'].shape[0]
     info = (
-        f"Frames: {T} ({T / 30:.1f}s @ 30 FPS)\n"
+        f"Frames: {T} ({T / 30:.1f}s @ 30 FPS) → bmimic: {T_bmimic} frames @ 50 FPS\n"
         f"Preprocess: {timing['preprocess']:.2f}s | "
         f"Inference: {timing['infer']:.2f}s | "
         f"Postprocess: {timing['postprocess']:.2f}s | "
         f"Total: {timing['total']:.2f}s\n"
-        f"Output: dof ({T}, 29), root_trans ({T}, 3), root_rot_quat ({T}, 4)"
+        f"Output keys: fps, joint_pos, joint_vel, body_pos_w, body_quat_w, "
+        f"body_lin_vel_w, body_ang_vel_w"
     )
 
     return fig, output_path, info
@@ -73,7 +80,7 @@ demo = gr.Interface(
     inputs=gr.File(label="Upload AMASS NPZ file", file_types=[".npz"]),
     outputs=[
         gr.Plot(label="G1 Robot Skeleton Animation"),
-        gr.File(label="Download Result (PKL)"),
+        gr.File(label="Download Result (bmimic NPZ)"),
         gr.Textbox(label="Info", lines=3),
     ],
     title="Human → G1 Robot Motion Retargeting",
@@ -82,8 +89,8 @@ demo = gr.Interface(
         "and get Unitree G1 humanoid robot motion.\n\n"
         "**Input format**: AMASS NPZ with fields `trans/root_orient/pose_body` "
         "(or `transl/global_orient/body_pose`), optionally `mocap_frame_rate`.\n\n"
-        "**Output**: PKL file containing `dof` (T, 29), `root_trans` (T, 3), "
-        "`root_rot_quat` (T, 4, wxyz format)."
+        "**Output**: bmimic NPZ (50 FPS) with `joint_pos`, `joint_vel`, "
+        "`body_pos_w`, `body_quat_w`, `body_lin_vel_w`, `body_ang_vel_w`."
     ),
     examples=[["examples/sample_motion.npz"]] if os.path.exists("examples/sample_motion.npz") else None,
     cache_examples=False,

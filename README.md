@@ -34,11 +34,6 @@ Install PyTorch (adjust CUDA version as needed):
 pip install torch --index-url https://download.pytorch.org/whl/cu118
 ```
 
-Install Pinocchio (robot forward kinematics, needed for visualization):
-
-```bash
-conda install -c conda-forge pinocchio
-```
 
 Install remaining dependencies:
 
@@ -56,7 +51,7 @@ On first run, the model checkpoint (~518 MB) and SMPL-X body model (~104 MB) wil
 
 Upload any AMASS `.npz` file (or use the provided examples in `examples/`) to get:
 - Interactive 3D skeleton animation
-- Downloadable `.pkl` result file
+- Downloadable bmimic `.npz` result file
 
 ### 3. Command-line Inference
 
@@ -82,39 +77,24 @@ python inference.py --src examples/sample_motion.npz --output-dir output/ --no-f
 |--------|--------|-----------|
 | AMASS `.npz` | `trans`, `root_orient`, `pose_body` | Z-up (auto-converted) |
 | Standard `.npz` | `transl`, `global_orient`, `body_pose` | Y-up |
-| `.pkl` | same as above | Z-up or Y-up |
 
 High frame-rate sequences (>30 FPS) are automatically downsampled to 30 FPS.
 
 #### Output format
 
-A `.pkl` file containing a dictionary:
+A bmimic `.npz` file at 50 FPS:
 
 ```python
 {
-    'dof':           np.ndarray (T, 29),   # joint angles [rad]
-    'root_trans':    np.ndarray (T, 3),    # root XYZ position [m]
-    'root_rot_quat': np.ndarray (T, 4),   # root orientation quaternion (w, x, y, z)
+    'fps':            np.ndarray (1,),          # 50
+    'joint_pos':      np.ndarray (T, 29),       # joint angles [rad]
+    'joint_vel':      np.ndarray (T, 29),       # joint velocities [rad/s]
+    'body_pos_w':     np.ndarray (T, 30, 3),    # body positions in world frame [m]
+    'body_quat_w':    np.ndarray (T, 30, 4),    # body orientations wxyz in world frame
+    'body_lin_vel_w': np.ndarray (T, 30, 3),    # body linear velocities [m/s]
+    'body_ang_vel_w': np.ndarray (T, 30, 3),    # body angular velocities [rad/s]
 }
 ```
-
-### 4. Python API
-
-```python
-from inference import load_all, infer_single
-
-# Load all models (auto-downloads weights on first call)
-model, smplx_model, betas, smplx_mean, smplx_std, g1_mean, g1_std, device = load_all()
-
-# Run inference
-result, timing = infer_single(
-    "examples/sample_motion.npz",
-    model, smplx_model, betas,
-    smplx_mean, smplx_std, g1_mean, g1_std, device
-)
-# result: dict with 'dof', 'root_trans', 'root_rot_quat'
-```
-
 ---
 
 ## Model Architecture
